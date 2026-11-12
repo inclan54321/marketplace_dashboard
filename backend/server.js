@@ -10,9 +10,7 @@ const cron = require('node-cron');
 const admin = require('firebase-admin');
 const { getApps, initializeApp, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
-const serviceAccount = process.env.FIREBASE_KEY
-    ? JSON.parse(process.env.FIREBASE_KEY)
-    : require('./firebase-key.json');
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 if (getApps().length === 0) {
     initializeApp({
