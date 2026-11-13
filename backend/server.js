@@ -1033,6 +1033,99 @@ app.put('/api/admin/soporte/:id/cerrar', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// ============================================================
+// 🔥 TESTERS - ESTADO GLOBAL
+// ============================================================
+app.get('/api/tester/estado-global', async (req, res) => {
+  try {
+    const total = await pool.query('SELECT COUNT(*)::int AS total FROM testers');
+    const totalTesters = total.rows[0].total;
+
+    const hoy = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM dias_tester WHERE fecha = CURRENT_DATE`
+    );
+    const conectadosHoy = hoy.rows[0].total;
+
+    const cumplen = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM (
+         SELECT tester_id FROM dias_tester
+         GROUP BY tester_id
+         HAVING COUNT(*) >= 14
+       ) sub`
+    );
+    const cumplen14 = cumplen.rows[0].total;
+
+    let diasPrueba = 0;
+    if (totalTesters > 0) {
+      const primera = await pool.query('SELECT MIN(fecha) AS f FROM dias_tester');
+      if (primera.rows[0]?.f) {
+        const inicio = new Date(primera.rows[0].f);
+        const hoyD = new Date();
+        inicio.setHours(0, 0, 0, 0);
+        hoyD.setHours(0, 0, 0, 0);
+        diasPrueba = Math.floor((hoyD - inicio) / (1000 * 60 * 60 * 24)) + 1;
+      }
+    }
+
+    res.json({
+      total_testers: totalTesters,
+      conectados_hoy: conectadosHoy,
+      faltan_hoy: Math.max(0, totalTesters - conectadosHoy),
+      cumplen_14_dias: cumplen14,
+      dias_prueba: diasPrueba,
+      minimo_testers: 12,
+      minimo_dias: 14,
+      prueba_completa: diasPrueba >= 14 && cumplen14 >= 12,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔥 TESTERS - CUPO
+// ============================================================
+app.get('/api/tester/cupo', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT COUNT(*)::int AS total FROM testers');
+    const total = r.rows[0].total;
+    const limite = 20;
+    res.json({
+      total: total,
+      limite: limite,
+      disponibles: Math.max(0, limite - total),
+      cerrado: total >= limite,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// 🔥 TESTERS - LISTA COMPLETA (PARA LA PESTAÑA)
+// ============================================================
+app.get('/api/tester/lista', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        t.id,
+        t.usuario_id,
+        t.fecha_registro,
+        u.nombre,
+        u.email,
+        u.foto_perfil,
+        (SELECT COUNT(*)::int FROM dias_tester d WHERE d.tester_id = t.id) AS dias_conectado,
+        (SELECT STRING_AGG(n.numero::text, ', ') FROM numeros_tester n WHERE n.tester_id = t.id) AS numeros_elegidos
+      FROM testers t
+      LEFT JOIN usuarios u ON t.usuario_id = u.uid
+      ORDER BY t.fecha_registro DESC
+    `);
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(port, '0.0.0.0', () => {
     console.log(`>>> 🚀 Backend dashboard corriendo en http://0.0.0.0:${port}`);
 });
